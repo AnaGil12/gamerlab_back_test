@@ -35,6 +35,38 @@
       font-size: 0.9em;
       border-radius: 4px;
       cursor: pointer;
+      margin-left: 10px;
+    }
+    .actions-container {
+      display: flex;
+      align-items: center;
+    }
+    .export-options {
+      display: flex;
+      margin-left: 15px;
+    }
+    .export-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 15px;
+      border-radius: 4px;
+      text-decoration: none;
+      color: white;
+      font-size: 0.9em;
+      margin-left: 10px;
+      transition: all 0.3s;
+    }
+    .export-btn:hover {
+      opacity: 0.9;
+    }
+    .excel-btn {
+      background-color: #1E7145;
+    }
+    .pdf-btn {
+      background-color: #D04423;
+    }
+    .export-icon {
+      margin-right: 5px;
     }
     .dashboard-grid {
       display: grid;
@@ -152,7 +184,17 @@
 <body>
   <div class="header-container">
     <h1>Dashboard de Evaluaciones en Tiempo Real</h1>
-    <button id="refresh-btn" class="refresh-btn">↻ Actualizar datos</button>
+    <div class="actions-container">
+      <button id="refresh-btn" class="refresh-btn">↻ Actualizar datos</button>
+      <div id="export-options" class="export-options" style="display: none;">
+        <a href="/evaluaciones/exportar_excel" class="export-btn excel-btn">
+          <span class="export-icon">📊</span> Exportar a Excel
+        </a>
+        <a href="/evaluaciones/exportar_pdf" class="export-btn pdf-btn">
+          <span class="export-icon">📄</span> Exportar a PDF
+        </a>
+      </div>
+    </div>
   </div>
   
   <a href="/" class="volver">← Volver al inicio</a>
@@ -250,24 +292,245 @@
         </table>
       </div>
     </div>
+    
+    <!-- Analytics Section -->
+    <div class="card full-width">
+      <h2>Análisis de Evaluaciones</h2>
+      <div class="tabs">
+        <div class="tab active" data-tab="top3">Top 3 Videojuegos</div>
+        <div class="tab" data-tab="distribucion">Distribución por Materia</div>
+      </div>
+      
+      <div class="tab-content active" id="top3-content">
+        <div class="chart-container" style="position: relative; height:400px;">
+          <canvas id="top3Chart"></canvas>
+        </div>
+      </div>
+      
+      <div class="tab-content" id="distribucion-content">
+        <div class="chart-container" style="position: relative; height:400px;">
+          <canvas id="distribucionChart"></canvas>
+        </div>
+      </div>
+    </div>
   </div>
   
+  <!-- Agregar Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <script>
-    // Función para actualizar los datos cada cierto tiempo
-    document.addEventListener('DOMContentLoaded', () => {
-      // Botón de actualización manual
-      document.getElementById('refresh-btn').addEventListener('click', () => {
-        location.reload();
-      });
-      
-      // Actualización automática cada 60 segundos
-      setInterval(() => {
-        location.reload();
-      }, 60000);
-      
-      // Actualizar tiempo de última actualización
-      document.getElementById('last-update-time').textContent = new Date().toLocaleTimeString();
+    // Actualizar la página automáticamente cada 30 segundos
+    let refreshInterval = setInterval(() => {
+      document.getElementById('refresh-btn').click();
+    }, 30000);
+    
+    document.getElementById('refresh-btn').addEventListener('click', function() {
+      location.reload();
     });
+    
+    // Función para verificar si el usuario es administrador o jurado y mostrar opciones de exportación
+    function verificarPermisos() {
+      // En una aplicación real, esta información vendría del backend
+      // Como ejemplo, usamos localStorage para simular un tipo de usuario (admin, jurado, participante)
+      const userRole = localStorage.getItem('userRole') || '';
+      
+      if (userRole === 'admin' || userRole === 'jurado') {
+        document.getElementById('export-options').style.display = 'flex';
+      }
+    }
+    
+    // Función para establecer el rol de usuario (SOLO PARA DEMOSTRACION)
+    function setUserRole(role) {
+      localStorage.setItem('userRole', role);
+      verificarPermisos();
+    }
+    
+    // Crear panel de control temporal para demostración de roles
+    function crearPanelRoles() {
+      const panelDiv = document.createElement('div');
+      panelDiv.className = 'role-panel';
+      panelDiv.style.position = 'fixed';
+      panelDiv.style.bottom = '20px';
+      panelDiv.style.right = '20px';
+      panelDiv.style.background = '#f8f9fa';
+      panelDiv.style.padding = '10px';
+      panelDiv.style.borderRadius = '5px';
+      panelDiv.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+      
+      panelDiv.innerHTML = `
+        <div style="margin-bottom: 5px; font-weight: bold;">Simular Rol:</div>
+        <button onclick="setUserRole('admin')" style="margin-right: 5px; padding: 3px 8px;">Admin</button>
+        <button onclick="setUserRole('jurado')" style="margin-right: 5px; padding: 3px 8px;">Jurado</button>
+        <button onclick="setUserRole('participante')" style="padding: 3px 8px;">Participante</button>
+      `;
+      
+      document.body.appendChild(panelDiv);
+    }
+    
+    // Inicializar cuando se cargue la página
+    window.addEventListener('DOMContentLoaded', () => {
+      cargarAnalytics();
+      verificarPermisos();
+      crearPanelRoles(); // Solo para demostración
+    });
+    
+    // Función para cambiar pestañas
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Desactivar todas las pestañas
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        // Activar la pestaña seleccionada
+        tab.classList.add('active');
+        document.getElementById(`${tab.dataset.tab}-content`).classList.add('active');
+      });
+    });
+    
+    // Cargar datos de analytics y crear gráficos
+    async function cargarAnalytics() {
+      try {
+        const response = await fetch('/evaluaciones/analytics');
+        const data = await response.json();
+        
+        // Crear gráfico Top 3
+        crearGraficoTop3(data.top3Videojuegos);
+        
+        // Crear gráfico de distribución por materia
+        crearGraficoDistribucion(data.distribucionPorMateria);
+      } catch (error) {
+        console.error('Error al cargar datos de analytics:', error);
+      }
+    }
+    
+    function crearGraficoTop3(top3) {
+      const ctx = document.getElementById('top3Chart').getContext('2d');
+      
+      // Colores para los videojuegos
+      const backgroundColors = [
+        'rgba(255, 99, 132, 0.7)',
+        'rgba(54, 162, 235, 0.7)',
+        'rgba(255, 206, 86, 0.7)'
+      ];
+      
+      const borderColors = [
+        'rgba(255, 99, 132, 1)',
+        'rgba(54, 162, 235, 1)',
+        'rgba(255, 206, 86, 1)'
+      ];
+      
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: top3.map(vj => vj.nombre),
+          datasets: [{
+            label: 'Promedio de Calificación',
+            data: top3.map(vj => vj.promedio),
+            backgroundColor: backgroundColors,
+            borderColor: borderColors,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Top 3 Videojuegos con Mejor Calificación',
+              font: {
+                size: 16
+              }
+            },
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                afterLabel: function(context) {
+                  const vj = top3[context.dataIndex];
+                  return `Equipo: ${vj.equipo}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              beginAtZero: true,
+              max: 5,
+              title: {
+                display: true,
+                text: 'Promedio'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    function crearGraficoDistribucion(distribucion) {
+      const ctx = document.getElementById('distribucionChart').getContext('2d');
+      
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: distribucion.map(d => d.nrc),
+          datasets: [
+            {
+              label: 'Promedio por NRC',
+              data: distribucion.map(d => d.promedio),
+              backgroundColor: 'rgba(54, 162, 235, 0.7)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Cantidad de Videojuegos',
+              data: distribucion.map(d => d.cantidad),
+              backgroundColor: 'rgba(255, 99, 132, 0.7)',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 1,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Distribución por Materia (NRC)',
+              font: {
+                size: 16
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Promedio'
+              },
+              max: 5
+            },
+            y1: {
+              beginAtZero: true,
+              position: 'right',
+              grid: {
+                drawOnChartArea: false
+              },
+              title: {
+                display: true,
+                text: 'Cantidad'
+              }
+            }
+          }
+        }
+      });
+    }
   </script>
 </body>
 </html> 

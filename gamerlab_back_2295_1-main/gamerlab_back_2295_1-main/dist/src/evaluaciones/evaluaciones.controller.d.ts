@@ -1,5 +1,6 @@
 import { EvaluacionesService } from './evaluaciones.service';
 import { ConsolidacionEvaluacionDto } from './dto/consolidacion-evaluacion.dto';
+import { Response } from 'express';
 export declare class EvaluacionesController {
     private readonly evaluacionesService;
     constructor(evaluacionesService: EvaluacionesService);
@@ -45,6 +46,28 @@ export declare class EvaluacionesController {
             }[];
         }[];
     }>;
+    getAnalyticsData(): Promise<{
+        top3Videojuegos: {
+            nombre: string;
+            promedio: number;
+            equipo: string;
+            id: number;
+        }[];
+        distribucionPorMateria: {
+            nrc: string;
+            promedio: number;
+            cantidad: number;
+        }[];
+        videojuegos: {
+            id: number;
+            nombre: string;
+            criterios: {
+                nombre: string;
+                promedio: number;
+            }[];
+            promedioTotal: number;
+        }[];
+    }>;
     getVisualizacionDashboard(): Promise<{
         title: string;
         consolidaciones: ConsolidacionEvaluacionDto[];
@@ -58,6 +81,8 @@ export declare class EvaluacionesController {
             porcentaje_completado: number;
         }[];
     }>;
+    exportToExcel(res: Response): Promise<void>;
+    exportToPdf(res: Response): Promise<void>;
     getDetalleEvaluacion(id: string): Promise<{
         title: string;
         id_videojuego: string;

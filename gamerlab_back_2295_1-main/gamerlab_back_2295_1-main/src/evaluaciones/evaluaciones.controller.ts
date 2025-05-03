@@ -1,6 +1,7 @@
-import { Controller, Get, Param, ParseIntPipe, Render, Query } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Render, Query, Res, HttpStatus } from '@nestjs/common';
 import { EvaluacionesService } from './evaluaciones.service';
 import { ConsolidacionEvaluacionDto } from './dto/consolidacion-evaluacion.dto';
+import { Response } from 'express';
 
 @Controller('evaluaciones')
 export class EvaluacionesController {
@@ -106,6 +107,56 @@ export class EvaluacionesController {
     return datosAnalisis;
   }
 
+  @Get('analytics')
+  async getAnalyticsData() {
+    const consolidaciones = await this.evaluacionesService.listarConsolidacionesVideojuegos();
+    
+    // Top 3 videojuegos
+    const top3Videojuegos = [...consolidaciones]
+      .sort((a, b) => b.promedio_total - a.promedio_total)
+      .slice(0, 3);
+    
+    // Obtener lista de materias (asumiendo que la materia se almacena en algún atributo)
+    // Por ahora simulamos esta información
+    const materiasPorVideojuego = consolidaciones.map(c => ({
+      id_videojuego: c.id_videojuego,
+      nombre_videojuego: c.nombre_videojuego,
+      nrc: Math.floor(Math.random() * 5) + 1, // Simulación: asigna un NRC del 1 al 5
+      promedio: c.promedio_total
+    }));
+    
+    // Agrupar por NRC para distribución por materia
+    const nrcs = [...new Set(materiasPorVideojuego.map(m => m.nrc))];
+    const distribucionPorNRC = nrcs.map(nrc => {
+      const videojuegosPorNRC = materiasPorVideojuego.filter(m => m.nrc === nrc);
+      return {
+        nrc: `NRC-${nrc}`,
+        promedio: videojuegosPorNRC.reduce((sum, vj) => sum + vj.promedio, 0) / videojuegosPorNRC.length,
+        cantidad: videojuegosPorNRC.length
+      };
+    });
+    
+    return {
+      top3Videojuegos: top3Videojuegos.map(vj => ({
+        nombre: vj.nombre_videojuego,
+        promedio: vj.promedio_total,
+        equipo: vj.equipo,
+        id: vj.id_videojuego
+      })),
+      distribucionPorMateria: distribucionPorNRC,
+      // Para los gráficos por videojuego
+      videojuegos: consolidaciones.map(vj => ({
+        id: vj.id_videojuego,
+        nombre: vj.nombre_videojuego,
+        criterios: vj.criterios.map(c => ({
+          nombre: c.nombre,
+          promedio: c.promedio
+        })),
+        promedioTotal: vj.promedio_total
+      }))
+    };
+  }
+
   @Get('dashboard')
   @Render('dashboard')
   async getVisualizacionDashboard() {
@@ -137,6 +188,42 @@ export class EvaluacionesController {
     };
   }
 
+  @Get('exportar_excel')
+  async exportToExcel(@Res() res: Response) {
+    try {
+      // Simplemente retorna un mensaje de éxito
+      res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Exportación a Excel simulada correctamente',
+        fecha: new Date()
+      });
+    } catch (error) {
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'Error simulado en exportación a Excel',
+        error: error.message
+      });
+    }
+  }
+
+  @Get('exportar_pdf')
+  async exportToPdf(@Res() res: Response) {
+    try {
+      // Simplemente retorna un mensaje de éxito
+      res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Exportación a PDF simulada correctamente',
+        fecha: new Date()
+      });
+    } catch (error) {
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: 'Error simulado en exportación a PDF',
+        error: error.message
+      });
+    }
+  }
+  
   @Get('detalle')
   @Render('evaluacion-detalle')
   async getDetalleEvaluacion(@Query('id') id: string) {

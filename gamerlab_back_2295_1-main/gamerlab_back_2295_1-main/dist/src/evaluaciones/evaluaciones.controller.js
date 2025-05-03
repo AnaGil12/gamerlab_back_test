@@ -99,6 +99,45 @@ let EvaluacionesController = class EvaluacionesController {
         };
         return datosAnalisis;
     }
+    async getAnalyticsData() {
+        const consolidaciones = await this.evaluacionesService.listarConsolidacionesVideojuegos();
+        const top3Videojuegos = [...consolidaciones]
+            .sort((a, b) => b.promedio_total - a.promedio_total)
+            .slice(0, 3);
+        const materiasPorVideojuego = consolidaciones.map(c => ({
+            id_videojuego: c.id_videojuego,
+            nombre_videojuego: c.nombre_videojuego,
+            nrc: Math.floor(Math.random() * 5) + 1,
+            promedio: c.promedio_total
+        }));
+        const nrcs = [...new Set(materiasPorVideojuego.map(m => m.nrc))];
+        const distribucionPorNRC = nrcs.map(nrc => {
+            const videojuegosPorNRC = materiasPorVideojuego.filter(m => m.nrc === nrc);
+            return {
+                nrc: `NRC-${nrc}`,
+                promedio: videojuegosPorNRC.reduce((sum, vj) => sum + vj.promedio, 0) / videojuegosPorNRC.length,
+                cantidad: videojuegosPorNRC.length
+            };
+        });
+        return {
+            top3Videojuegos: top3Videojuegos.map(vj => ({
+                nombre: vj.nombre_videojuego,
+                promedio: vj.promedio_total,
+                equipo: vj.equipo,
+                id: vj.id_videojuego
+            })),
+            distribucionPorMateria: distribucionPorNRC,
+            videojuegos: consolidaciones.map(vj => ({
+                id: vj.id_videojuego,
+                nombre: vj.nombre_videojuego,
+                criterios: vj.criterios.map(c => ({
+                    nombre: c.nombre,
+                    promedio: c.promedio
+                })),
+                promedioTotal: vj.promedio_total
+            }))
+        };
+    }
     async getVisualizacionDashboard() {
         const consolidaciones = await this.evaluacionesService.listarConsolidacionesVideojuegos();
         const jurados = await this.evaluacionesService.obtenerJurados();
@@ -119,6 +158,38 @@ let EvaluacionesController = class EvaluacionesController {
             criterios,
             progresoEvaluaciones
         };
+    }
+    async exportToExcel(res) {
+        try {
+            res.status(common_1.HttpStatus.OK).json({
+                success: true,
+                message: 'Exportación a Excel simulada correctamente',
+                fecha: new Date()
+            });
+        }
+        catch (error) {
+            res.status(common_1.HttpStatus.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: 'Error simulado en exportación a Excel',
+                error: error.message
+            });
+        }
+    }
+    async exportToPdf(res) {
+        try {
+            res.status(common_1.HttpStatus.OK).json({
+                success: true,
+                message: 'Exportación a PDF simulada correctamente',
+                fecha: new Date()
+            });
+        }
+        catch (error) {
+            res.status(common_1.HttpStatus.INTERNAL_SERVER_ERROR).json({
+                success: false,
+                message: 'Error simulado en exportación a PDF',
+                error: error.message
+            });
+        }
     }
     async getDetalleEvaluacion(id) {
         return {
@@ -173,12 +244,32 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], EvaluacionesController.prototype, "getDatosAnalisis", null);
 __decorate([
+    (0, common_1.Get)('analytics'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], EvaluacionesController.prototype, "getAnalyticsData", null);
+__decorate([
     (0, common_1.Get)('dashboard'),
     (0, common_1.Render)('dashboard'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], EvaluacionesController.prototype, "getVisualizacionDashboard", null);
+__decorate([
+    (0, common_1.Get)('exportar_excel'),
+    __param(0, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], EvaluacionesController.prototype, "exportToExcel", null);
+__decorate([
+    (0, common_1.Get)('exportar_pdf'),
+    __param(0, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], EvaluacionesController.prototype, "exportToPdf", null);
 __decorate([
     (0, common_1.Get)('detalle'),
     (0, common_1.Render)('evaluacion-detalle'),

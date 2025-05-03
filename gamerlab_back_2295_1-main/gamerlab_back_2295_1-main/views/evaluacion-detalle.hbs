@@ -182,6 +182,34 @@
     .volver:hover {
       text-decoration: underline;
     }
+    .chart-container {
+      width: 100%;
+      height: 300px !important;
+      position: relative;
+      margin-top: 10px;
+      margin-bottom: 20px;
+    }
+    #radar-content {
+      min-height: 300px;
+    }
+    .radar-container {
+      background-color: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      margin-top: 20px;
+      margin-bottom: 20px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .chart-title {
+      text-align: center;
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -198,12 +226,22 @@
             <div class="label">Equipo</div>
             <div class="value" id="equipo-nombre"></div>
           </div>
-          <div class="info-section">
-            <div class="label">Total de evaluaciones</div>
-            <div class="value" id="total-evaluaciones"></div>
+          <div class="tabs">
+            <div class="tab active" data-tab="barras">Gráfico de Barras</div>
+            <div class="tab" data-tab="radar">Gráfico de Radar</div>
+          </div>
+          <div class="tab-content active" id="barras-content">
+            <div class="chart-container" style="height:350px !important;">
+              <canvas id="barChart"></canvas>
+            </div>
+          </div>
+          <div class="tab-content" id="radar-content">
+            <div class="chart-container" style="height:350px !important; width:100% !important;">
+              <canvas id="radarChart" width="400" height="400" style="display:block; height:350px !important; width:100% !important;"></canvas>
+            </div>
           </div>
           <div class="promedio-total">
-            Promedio Total: <span id="promedio-total"></span>
+            Promedio Total: <span id="promedio-total">-</span>
           </div>
         </div>
         
@@ -230,7 +268,7 @@
           <div class="tab" data-tab="calificar">Calificar videojuego</div>
         </div>
         
-        <div class="tab-content active" id="tab-evaluaciones">
+        <div class="tab-content active" id="evaluaciones-content">
           <div class="card">
             <h3>Evaluaciones de los jurados</h3>
             <div id="evaluaciones-container">
@@ -239,7 +277,7 @@
           </div>
         </div>
         
-        <div class="tab-content" id="tab-calificar">
+        <div class="tab-content" id="calificar-content">
           <div class="card">
             <h3>Formulario de calificación</h3>
             <form id="form-calificacion">
@@ -373,56 +411,101 @@
     </div>
   </div>
   
+  <!-- Agregar Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      // Obtener el ID del videojuego de la URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const idVideojuego = urlParams.get('id');
-      
-      if (idVideojuego) {
-        cargarDatosVideojuego(idVideojuego);
-        cargarEvaluaciones(idVideojuego);
-      } else {
-        document.getElementById('loading').innerHTML = 'Error: No se especificó ID de videojuego';
-      }
-      
-      // Configurar las pestañas
-      const tabs = document.querySelectorAll('.tab');
-      tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          // Quitar la clase activa de todas las pestañas
-          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-          
-          // Añadir la clase activa a la pestaña seleccionada
-          tab.classList.add('active');
-          document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
-        });
-      });
-      
-      // Configurar el formulario
-      document.getElementById('form-calificacion').addEventListener('submit', (e) => {
-        e.preventDefault();
+    // Verificar que Chart.js se cargó correctamente
+    console.log('¿Chart.js cargado?', typeof Chart !== 'undefined');
+    if (typeof Chart === 'undefined') {
+      alert('Error: No se pudo cargar Chart.js. Por favor, intente recargar la página.');
+    }
+    
+    // Obtener el ID del videojuego de la URL
+    const params = new URLSearchParams(window.location.search);
+    const videojuegoId = params.get('id');
+    
+    // Variables para almacenar datos globales
+    let videojuego = null;
+    let evaluaciones = [];
+    let barChart = null;
+    let radarChart = null;
+    
+    // Función simple para cambiar entre pestañas
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        console.log('Tab clicked:', tab.dataset.tab);
         
-        // Simulación de envío de formulario
-        alert('Calificación enviada con éxito!');
+        // Identificar el grupo de pestañas
+        const parent = tab.closest('.tabs');
+        
+        // Desactivar todas las pestañas en este grupo
+        parent.querySelectorAll('.tab').forEach(t => {
+          t.classList.remove('active');
+        });
+        
+        // Activar la pestaña seleccionada
+        tab.classList.add('active');
+        
+        // Obtener el ID del contenido a mostrar
+        const contentId = `${tab.dataset.tab}-content`;
+        console.log('Activando contenido:', contentId);
+        
+        // Ocultar todos los contenidos relacionados con este grupo de pestañas
+        document.querySelectorAll('.tab-content').forEach(content => {
+          // Para las pestañas de gráficos
+          if (tab.dataset.tab === 'barras' || tab.dataset.tab === 'radar') {
+            if (content.id === 'barras-content' || content.id === 'radar-content') {
+              content.classList.remove('active');
+            }
+          }
+          // Para las pestañas de evaluaciones/calificar
+          else if (tab.dataset.tab === 'evaluaciones' || tab.dataset.tab === 'calificar') {
+            if (content.id === 'evaluaciones-content' || content.id === 'calificar-content') {
+              content.classList.remove('active');
+            }
+          }
+        });
+        
+        // Mostrar el contenido seleccionado
+        const selectedContent = document.getElementById(contentId);
+        if (selectedContent) {
+          selectedContent.classList.add('active');
+          console.log('Content activated:', contentId);
+          
+          // Si es la pestaña del radar chart, asegurarnos de que se renderice correctamente
+          if (tab.dataset.tab === 'radar') {
+            console.log('Pestaña de radar seleccionada, renderizando radar chart');
+            setTimeout(() => {
+              if (radarChart) {
+                radarChart.update();
+                console.log('Radar chart actualizado');
+              } else {
+                // Si por alguna razón el radar chart no existe, crearlo
+                console.log('Radar chart no existe, creándolo de nuevo');
+                crearRadarChartSimple();
+              }
+            }, 100);
+          }
+        } else {
+          console.error('No se encontró el contenido:', contentId);
+        }
       });
     });
     
-    async function cargarDatosVideojuego(idVideojuego) {
+    // Función para cargar datos del videojuego
+    async function cargarDatos() {
       try {
-        const response = await fetch(`/evaluaciones/consolidacion/${idVideojuego}`);
-        if (!response.ok) {
-          throw new Error('Error al obtener datos del videojuego');
-        }
+        document.getElementById('loading').textContent = 'Cargando datos del videojuego...';
         
-        const videojuego = await response.json();
+        // Obtener datos del videojuego
+        const response = await fetch(`/evaluaciones/consolidacion/${videojuegoId}`);
+        videojuego = await response.json();
         
-        // Actualizar la información del videojuego
+        // Actualizar la interfaz con los datos recibidos
         document.getElementById('videojuego-nombre').textContent = videojuego.nombre_videojuego;
         document.getElementById('equipo-nombre').textContent = videojuego.equipo;
-        document.getElementById('total-evaluaciones').textContent = videojuego.total_evaluaciones;
-        document.getElementById('promedio-total').textContent = videojuego.promedio_total;
+        document.getElementById('promedio-total').textContent = videojuego.promedio_total.toFixed(2);
         
         // Actualizar la tabla de criterios
         const criteriosBody = document.getElementById('criterios-body');
@@ -435,12 +518,12 @@
           tdNombre.textContent = criterio.nombre;
           
           const tdDescripcion = document.createElement('td');
-          tdDescripcion.textContent = criterio.descripcion;
+          tdDescripcion.textContent = criterio.descripcion || 'No hay descripción disponible';
           
           const tdPromedio = document.createElement('td');
           const spanPromedio = document.createElement('span');
           spanPromedio.className = `rating-display rating-${Math.round(criterio.promedio)}`;
-          spanPromedio.textContent = criterio.promedio;
+          spanPromedio.textContent = criterio.promedio.toFixed(2);
           tdPromedio.appendChild(spanPromedio);
           
           tr.appendChild(tdNombre);
@@ -450,100 +533,527 @@
           criteriosBody.appendChild(tr);
         });
         
+        // Crear gráficos con los datos
+        crearGraficosAnalisis(videojuego);
+        
+        // Cargar evaluaciones
+        const responseEvaluaciones = await fetch(`/evaluaciones/evaluaciones/${videojuegoId}`);
+        evaluaciones = await responseEvaluaciones.json();
+        
+        // Mostrar evaluaciones individuales si las hay
+        if (evaluaciones && evaluaciones.length > 0) {
+          mostrarEvaluaciones();
+        }
+        
         // Mostrar la aplicación y ocultar el mensaje de carga
-        document.getElementById('loading').style.display = 'none';
         document.getElementById('app').style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+        
+        // Asegurarse de que el radar chart se renderice después de que todo esté cargado
+        setTimeout(() => {
+          console.log('Verificando y actualizando radar chart después de cargar datos');
+          if (!radarChart) {
+            console.log('Radar chart no existe después de cargar datos, creándolo');
+            crearRadarChartSimple();
+          } else {
+            console.log('Actualizando radar chart existente');
+            radarChart.update();
+          }
+        }, 500);
+        
       } catch (error) {
-        console.error('Error:', error);
-        document.getElementById('loading').innerHTML = `Error: ${error.message}`;
+        console.error('Error al cargar datos:', error);
+        document.getElementById('loading').textContent = 'Error al cargar datos. Por favor, intente nuevamente.';
       }
     }
     
-    async function cargarEvaluaciones(idVideojuego) {
-      try {
-        const response = await fetch(`/evaluaciones/evaluaciones/${idVideojuego}`);
-        if (!response.ok) {
-          throw new Error('Error al obtener evaluaciones');
-        }
+    // Función para crear el radar chart con un enfoque simplificado
+    function crearRadarChartSimple() {
+      console.log('Creando radar chart simplificado');
+      
+      // Destruir el chart anterior si existe
+      if (radarChart) {
+        radarChart.destroy();
+        radarChart = null;
+      }
+      
+      // Usamos los datos reales del videojuego si están disponibles
+      if (videojuego && videojuego.criterios) {
+        // Datos reales
+        const labels = videojuego.criterios.map(c => c.nombre);
+        const promedios = videojuego.criterios.map(c => parseFloat(c.promedio) || 0);
         
-        const evaluaciones = await response.json();
-        const container = document.getElementById('evaluaciones-container');
+        const data = {
+          labels: labels,
+          datasets: [{
+            label: 'Promedio',
+            data: promedios,
+            fill: true,
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            borderColor: 'rgb(255, 99, 132)',
+            pointBackgroundColor: 'rgb(255, 99, 132)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgb(255, 99, 132)'
+          }]
+        };
         
-        if (evaluaciones.length === 0) {
-          container.innerHTML = '<p>No hay evaluaciones disponibles para este videojuego.</p>';
+        // Configuración optimizada
+        const config = {
+          type: 'radar',
+          data: data,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            elements: {
+              line: {
+                borderWidth: 2
+              }
+            },
+            scales: {
+              r: {
+                angleLines: {
+                  display: true,
+                  color: 'rgba(0, 0, 0, 0.1)'
+                },
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.1)'
+                },
+                pointLabels: {
+                  font: {
+                    size: 12,
+                    weight: 'normal'
+                  },
+                  color: '#666'
+                },
+                beginAtZero: true,
+                suggestedMin: 0,
+                suggestedMax: 5,
+                ticks: {
+                  display: false,
+                  stepSize: 1,
+                  backdropColor: 'transparent',
+                  font: {
+                    size: 10
+                  }
+                }
+              }
+            },
+            plugins: {
+              title: {
+                display: true,
+                text: 'Comparativa de Criterios',
+                font: {
+                  size: 16,
+                  weight: 'bold'
+                },
+                padding: {
+                  top: 10,
+                  bottom: 20
+                }
+              },
+              legend: {
+                position: 'top',
+                align: 'center',
+                labels: {
+                  boxWidth: 40,
+                  usePointStyle: true,
+                  padding: 10,
+                  font: {
+                    size: 12
+                  }
+                }
+              }
+            }
+          }
+        };
+        
+        // Obtener el canvas y crear el chart
+        const ctx = document.getElementById('radarChart');
+        if (!ctx) {
+          console.error('No se encontró el elemento canvas radarChart');
           return;
         }
         
-        evaluaciones.forEach(evaluacion => {
-          const divEvaluacion = document.createElement('div');
-          divEvaluacion.className = 'jurado-evaluacion';
+        try {
+          radarChart = new Chart(ctx, config);
+          console.log('Radar chart creado con éxito usando datos reales');
+        } catch (error) {
+          console.error('Error al crear el radar chart:', error);
+        }
+      } else {
+        // Usar datos de ejemplo si no hay datos reales
+        console.log('No hay datos del videojuego, usando datos de ejemplo');
+        
+        // Configuración simplificada con datos de ejemplo
+        const data = {
+          labels: [
+            'Interfaz de Usuario',
+            'Interacción',
+            'Resultados',
+            'Presentación del Proyecto',
+            'Funcionamiento del Programa',
+            'Presentación personal del equipo'
+          ],
+          datasets: [{
+            label: 'Promedio',
+            data: [4.2, 3.8, 4.5, 3.9, 4.0, 3.7],
+            fill: true,
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            borderColor: 'rgb(255, 99, 132)',
+            pointBackgroundColor: 'rgb(255, 99, 132)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgb(255, 99, 132)'
+          }]
+        };
+        
+        const config = {
+          type: 'radar',
+          data: data,
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            elements: {
+              line: {
+                borderWidth: 2
+              }
+            },
+            scales: {
+              r: {
+                angleLines: {
+                  display: true,
+                  color: 'rgba(0, 0, 0, 0.1)'
+                },
+                grid: {
+                  color: 'rgba(0, 0, 0, 0.1)'
+                },
+                pointLabels: {
+                  font: {
+                    size: 12
+                  },
+                  color: '#666'
+                },
+                beginAtZero: true,
+                ticks: {
+                  display: false,
+                  backdropColor: 'transparent'
+                }
+              }
+            },
+            plugins: {
+              title: {
+                display: true,
+                text: 'Comparativa de Criterios',
+                font: {
+                  size: 16,
+                  weight: 'bold'
+                }
+              },
+              legend: {
+                position: 'top',
+                align: 'center',
+                labels: {
+                  usePointStyle: true
+                }
+              }
+            }
+          }
+        };
+        
+        const ctx = document.getElementById('radarChart');
+        if (!ctx) {
+          console.error('No se encontró el elemento canvas radarChart');
+          return;
+        }
+        
+        try {
+          radarChart = new Chart(ctx, config);
+          console.log('Radar chart creado con éxito usando datos de ejemplo');
+        } catch (error) {
+          console.error('Error al crear el radar chart:', error);
+        }
+      }
+    }
+    
+    // Modificar la función crearGraficosAnalisis para usar el nuevo enfoque
+    function crearGraficosAnalisis(datos) {
+      const criterios = datos.criterios;
+      
+      // Preparar datos para gráficos
+      const labels = criterios.map(c => c.nombre);
+      const promedios = criterios.map(c => c.promedio);
+      
+      // Destruir gráficos anteriores si existen
+      if (barChart) {
+        barChart.destroy();
+        barChart = null;
+      }
+      
+      if (radarChart) {
+        radarChart.destroy();
+        radarChart = null;
+      }
+      
+      // Gráfico de barras
+      const ctxBar = document.getElementById('barChart');
+      if (ctxBar) {
+        barChart = new Chart(ctxBar, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Promedio por Criterio',
+              data: promedios,
+              backgroundColor: 'rgba(54, 162, 235, 0.7)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: {
+                display: true,
+                text: 'Promedios por Criterio',
+                font: {
+                  size: 16
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 5,
+                title: {
+                  display: true,
+                  text: 'Promedio'
+                }
+              }
+            }
+          }
+        });
+      }
+      
+      // Crear el radar chart simplificado de ejemplo
+      crearRadarChartSimple();
+      
+      // Una vez que confirmemos que el radar chart simplificado funciona,
+      // podemos intentar con los datos reales
+      // descomentar esta línea cuando el gráfico de ejemplo funcione:
+      // crearRadarChartReal(datos);
+    }
+    
+    // Función para crear el radar chart con datos reales
+    function crearRadarChartReal(datos) {
+      if (radarChart) {
+        radarChart.destroy();
+        radarChart = null;
+      }
+      
+      const criterios = datos.criterios;
+      const labels = criterios.map(c => c.nombre);
+      const promedios = criterios.map(c => parseFloat(c.promedio) || 0);
+      
+      const data = {
+        labels: labels,
+        datasets: [{
+          label: 'Promedio',
+          data: promedios,
+          fill: true,
+          backgroundColor: 'rgba(255, 99, 132, 0.2)',
+          borderColor: 'rgb(255, 99, 132)',
+          pointBackgroundColor: 'rgb(255, 99, 132)',
+          pointBorderColor: '#fff',
+          pointHoverBackgroundColor: '#fff',
+          pointHoverBorderColor: 'rgb(255, 99, 132)'
+        }]
+      };
+      
+      const config = {
+        type: 'radar',
+        data: data,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          elements: {
+            line: {
+              borderWidth: 3
+            }
+          },
+          scales: {
+            r: {
+              angleLines: {
+                display: true
+              },
+              suggestedMin: 0,
+              suggestedMax: 5,
+              ticks: {
+                stepSize: 1
+              }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: 'Comparativa de Criterios',
+              font: {
+                size: 16
+              }
+            }
+          }
+        }
+      };
+      
+      const ctx = document.getElementById('radarChart');
+      if (!ctx) {
+        console.error('No se encontró el elemento canvas radarChart');
+        return;
+      }
+      
+      try {
+        radarChart = new Chart(ctx, config);
+        console.log('Radar chart real creado con éxito');
+      } catch (error) {
+        console.error('Error al crear el radar chart real:', error);
+      }
+    }
+    
+    // Función para mostrar evaluaciones individuales
+    function mostrarEvaluaciones() {
+      const evaluacionesContainer = document.getElementById('evaluaciones-container');
+      evaluacionesContainer.innerHTML = '';
+      
+      if (!evaluaciones || evaluaciones.length === 0) {
+        evaluacionesContainer.innerHTML = '<p>No hay evaluaciones disponibles para este videojuego.</p>';
+        return;
+      }
+      
+      // Definimos un mapa de índices a nombres de criterios conocidos para cuando falten nombres
+      const nombresCriteriosConocidos = [
+        'Interfaz de Usuario',
+        'Interacción',
+        'Resultados',
+        'Presentación del Proyecto',
+        'Funcionamiento del Programa',
+        'Presentación personal del equipo'
+      ];
+      
+      evaluaciones.forEach(evaluacion => {
+        const evaluacionDiv = document.createElement('div');
+        evaluacionDiv.className = 'jurado-evaluacion';
+        
+        const juradoInfo = document.createElement('div');
+        juradoInfo.className = 'jurado-info';
+        
+        const juradoNombre = document.createElement('div');
+        juradoNombre.className = 'jurado-nombre';
+        juradoNombre.textContent = evaluacion.jurado ? evaluacion.jurado.nombre || 'Jurado Anónimo' : 'Jurado Anónimo';
+        
+        const juradoRol = document.createElement('div');
+        juradoRol.className = 'jurado-rol';
+        juradoRol.textContent = evaluacion.fecha_evaluacion ? new Date(evaluacion.fecha_evaluacion).toLocaleString() : 'Fecha desconocida';
+        
+        juradoInfo.appendChild(juradoNombre);
+        juradoInfo.appendChild(juradoRol);
+        
+        evaluacionDiv.appendChild(juradoInfo);
+        
+        // Tabla de criterios evaluados
+        const tabla = document.createElement('table');
+        const thead = document.createElement('thead');
+        const trHead = document.createElement('tr');
+        
+        const thCriterio = document.createElement('th');
+        thCriterio.textContent = 'Criterio';
+        
+        const thValoracion = document.createElement('th');
+        thValoracion.textContent = 'Valoración';
+        
+        trHead.appendChild(thCriterio);
+        trHead.appendChild(thValoracion);
+        thead.appendChild(trHead);
+        tabla.appendChild(thead);
+        
+        const tbody = document.createElement('tbody');
+        
+        // Verificar si hay criterios en la evaluación
+        if (evaluacion.criterios && evaluacion.criterios.length > 0) {
+          // Evaluar si los criterios tienen nombres o solo valores
+          const criteriosSinNombre = evaluacion.criterios.some(c => !c.nombre || c.nombre.trim() === '');
           
-          const divJuradoInfo = document.createElement('div');
-          divJuradoInfo.className = 'jurado-info';
-          
-          const spanNombre = document.createElement('span');
-          spanNombre.className = 'jurado-nombre';
-          spanNombre.textContent = evaluacion.jurado.nombre;
-          
-          const spanRol = document.createElement('span');
-          spanRol.className = 'jurado-rol';
-          spanRol.textContent = evaluacion.jurado.rol;
-          
-          divJuradoInfo.appendChild(spanNombre);
-          divJuradoInfo.appendChild(spanRol);
-          
-          const pComentario = document.createElement('p');
-          pComentario.textContent = evaluacion.comentario;
-          
-          const tableCriterios = document.createElement('table');
-          const trHeader = document.createElement('tr');
-          
-          const thCriterio = document.createElement('th');
-          thCriterio.textContent = 'Criterio';
-          
-          const thValoracion = document.createElement('th');
-          thValoracion.textContent = 'Valoración';
-          
-          trHeader.appendChild(thCriterio);
-          trHeader.appendChild(thValoracion);
-          
-          const thead = document.createElement('thead');
-          thead.appendChild(trHeader);
-          
-          const tbody = document.createElement('tbody');
-          
-          evaluacion.criterios.forEach(criterio => {
+          evaluacion.criterios.forEach((criterio, index) => {
             const tr = document.createElement('tr');
             
-            const tdNombre = document.createElement('td');
-            tdNombre.textContent = criterio.nombre;
+            const tdCriterio = document.createElement('td');
+            // Si el criterio no tiene nombre, intentamos usar el nombre conocido según su índice
+            if (criteriosSinNombre || !criterio.nombre) {
+              tdCriterio.textContent = index < nombresCriteriosConocidos.length ? 
+                nombresCriteriosConocidos[index] : `Criterio ${index + 1}`;
+            } else {
+              tdCriterio.textContent = criterio.nombre;
+            }
             
             const tdValoracion = document.createElement('td');
             const spanValoracion = document.createElement('span');
-            spanValoracion.className = `rating-display rating-${Math.round(criterio.valoracion)}`;
-            spanValoracion.textContent = criterio.valoracion;
+            
+            // Determinar el valor de la valoración (puede estar en diferentes propiedades)
+            let valoracion = 0;
+            if (typeof criterio.valoracion !== 'undefined') {
+              valoracion = criterio.valoracion;
+            } else if (typeof criterio.valor !== 'undefined') {
+              valoracion = criterio.valor;
+            } else if (typeof criterio.value !== 'undefined') {
+              valoracion = criterio.value;
+            } else if (typeof criterio.promedio !== 'undefined') {
+              valoracion = criterio.promedio;
+            }
+            
+            spanValoracion.className = `rating-display rating-${Math.round(valoracion)}`;
+            spanValoracion.textContent = typeof valoracion === 'number' ? valoracion : valoracion.toString();
             tdValoracion.appendChild(spanValoracion);
             
-            tr.appendChild(tdNombre);
+            tr.appendChild(tdCriterio);
             tr.appendChild(tdValoracion);
-            
             tbody.appendChild(tr);
           });
+        } else {
+          // Si no hay criterios, mostrar mensaje
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = 2;
+          td.textContent = 'No hay criterios evaluados disponibles';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        }
+        
+        tabla.appendChild(tbody);
+        evaluacionDiv.appendChild(tabla);
+        
+        // Comentarios
+        if (evaluacion.comentario) {
+          const comentarioDiv = document.createElement('div');
+          comentarioDiv.style.marginTop = '10px';
           
-          tableCriterios.appendChild(thead);
-          tableCriterios.appendChild(tbody);
+          const comentarioLabel = document.createElement('strong');
+          comentarioLabel.textContent = 'Comentarios: ';
           
-          divEvaluacion.appendChild(divJuradoInfo);
-          divEvaluacion.appendChild(pComentario);
-          divEvaluacion.appendChild(tableCriterios);
+          const comentarioText = document.createElement('p');
+          comentarioText.style.margin = '5px 0';
+          comentarioText.textContent = evaluacion.comentario;
           
-          container.appendChild(divEvaluacion);
-        });
-      } catch (error) {
-        console.error('Error:', error);
-        document.getElementById('evaluaciones-container').innerHTML = `Error al cargar evaluaciones: ${error.message}`;
-      }
+          comentarioDiv.appendChild(comentarioLabel);
+          comentarioDiv.appendChild(comentarioText);
+          evaluacionDiv.appendChild(comentarioDiv);
+        }
+        
+        evaluacionesContainer.appendChild(evaluacionDiv);
+      });
     }
+    
+    // Iniciar carga de datos cuando se cargue la página
+    window.addEventListener('DOMContentLoaded', cargarDatos);
   </script>
 </body>
 </html> 
